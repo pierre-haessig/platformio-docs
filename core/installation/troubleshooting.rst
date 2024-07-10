@@ -9,66 +9,76 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 
-Troubleshooting
----------------
+.. _platformio_udev_rules:
+
+99-platformio-udev.rules
+------------------------
+
+Linux users have to install `udev <https://en.wikipedia.org/wiki/Udev>`_ rules
+for PlatformIO supported boards/devices. The latest version of the rules may be found at
+https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules
 
 .. note::
-    **Linux OS**: Don't forget to install :ref:`platformio_udev_rules`
+  Please check that your board's PID and VID  are listed in the rules.
+  You can list connected devices and their PID/VID using :ref:`cmd_device_list`
+  command.
 
-    **Windows OS**: Please check that you have correctly installed the
-    USB driver from the board manufacturer.
+This file must be placed at ``/etc/udev/rules.d/99-platformio-udev.rules``
+(preferred location) or ``/lib/udev/rules.d/99-platformio-udev.rules``
+(required on some broken systems).
 
-If you find any issues with PlatformIO Core Installer Script, please report to
-https://github.com/platformio/platformio-core-installer/issues
-
-
-.. _multiple_pio_cores_issue:
-
-Multiple PlatformIO Cores in a system
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Multiple standalone :ref:`piocore` in a system could lead to the different
-issues. We highly recommend to keep one instance of PlatformIO Core or use built-in
-PlatformIO Core in :ref:`pioide`:
-
-* :ref:`ide_vscode` - :ref:`ide_vscode_settings` > Set ``platformio-ide.useBuiltinPIOCore`` to ``true``.
-
-Finally, if you have a standalone :ref:`piocore` in a system, please open system
-Terminal (not PlatformIO IDE Terminal) and uninstall obsolete PlatformIO Core:
+Please open system Terminal and type
 
 .. code-block:: bash
 
-    pip uninstall platformio
-    python -m pip uninstall platformio
+    curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules | sudo tee /etc/udev/rules.d/99-platformio-udev.rules
 
-    # if you used macOS "brew"
-    brew uninstall platformio
+Or you can manually download and copy the file to a destination folder
 
-If you need to have :ref:`piocore` globally in a system, please
-:ref:`piocore_install_shell_commands`.
+.. code-block:: bash
 
-'platformio' is not recognized as an internal or external command
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    sudo cp 99-platformio-udev.rules /etc/udev/rules.d/99-platformio-udev.rules
 
-If you use :ref:`pioide`, please check in PlatformIO IDE Settings that
-"Use built-in PlatformIO Core" is enabled.
 
-If you modify the system environment variable ``PATH`` in your Bash/Fish/ZSH
-profile, please do not override global ``PATH``. This line
-``export PATH="/my/custom/path"`` is incorrect. Use ``export PATH="/my/custom/path":$PATH``
-instead.
+Restart "udev" management tool:
 
-ImportError: cannot import name _remove_dead_weakref
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. code-block:: bash
 
-Windows users can experience this issue when multiple Python interpreters are
-installed in a system and conflict with each other. The easy way to fix this
-problem is uninstalling all Python interpreters using Windows Programs Manager
-and installing them manually again.
+    sudo service udev restart
 
-1. "Windows > Start Menu > Settings > System > Apps & Features", select
-   Python interpreters and uninstall them.
-2. Install the latest Python interpreter, see :ref:`faq_install_python` guide
-3. Remove ``C:\Users\YourUserName\.platformio`` and ``C:\.platformio`` folders
-   if exist (do not forget to replace "YourUserName" with the real user name)
-4. Restart :ref:`pioide`.
+    # or
+
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+
+
+After this file is installed, physically unplug and reconnect your board.
+
+
+Alternative using group membership
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Instead of using a udev rules file, Linux users can get write access to the boards
+using system `groups <https://wiki.archlinux.org/title/Users_and_groups>`__.
+
+First, you need to identify which group owns the file corresponding to the serial port communication to the board (the serial port name can be found with :ref:`cmd_device_list`
+  command). For example, the file permissions for the serial port ``/dev/ttyACM0`` can be queried by:
+
+.. code-block:: bash
+
+    ls -l /dev/ttyACM0
+    
+    # prints something like:
+    # crw-rw---- 1 root dialout 166, 0 juil. 10 13:43 /dev/ttyACM0
+
+In that case, the read/write permission (`rw`) is granted to both the “root” user and members of the “dialout” group. Now, it is possible to grant read/write access to all users (``$ sudo chmod a+rw /dev/ttyACM0``), but this would only last as long as the card remains connected (only the udev rules file mentioned above can make such change permanent).
+
+The alternative permanent solution is to add its own “username” to the “dialout” group, or whichever group name was identified at the preceding step. Typical names are “dialout”, “plugdev” (Debian/Ubuntu, Fedora), or “uucp” (Arch Linux). Adding a user to a group is done by:
+
+.. code-block:: bash
+
+    sudo usermod -a -G dialout $USERNAME
+
+.. note::
+  You will need to log out and log back in again (or reboot) for the user
+  group changes to take effect. The effectiveness of the change can be checked with the ``$ id`` shell command.
